@@ -8,6 +8,8 @@
 # shellcheck disable=SC1091
 . ./path.sh || exit 1;
 
+# INPUT wav.scp segments
+# OUTPUT ${dst_dir}/wav.${i}.scp ${dst_dir}/segments.${i}
 
 if [ $# -ne 3 ]; then
     echo "Usage: $0 <src_dir> <num_split> <dst_dir>"

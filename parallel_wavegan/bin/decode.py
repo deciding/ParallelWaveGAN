@@ -35,6 +35,8 @@ def main():
     parser.add_argument("--dumpdir", default=None, type=str,
                         help="directory including feature files. "
                              "you need to specify either feats-scp or dumpdir.")
+    parser.add_argument("--filename", default=None, type=str,
+                        help="single file if you want to decode it")
     parser.add_argument("--outdir", type=str, required=True,
                         help="directory to save generated speech.")
     parser.add_argument("--checkpoint", type=str, required=True,
@@ -71,12 +73,29 @@ def main():
     config.update(vars(args))
 
     # check arguments
-    if (args.feats_scp is not None and args.dumpdir is not None) or \
-            (args.feats_scp is None and args.dumpdir is None):
+    if args.filename is None and ((args.feats_scp is not None and args.dumpdir is not None) or \
+            (args.feats_scp is None and args.dumpdir is None)):
         raise ValueError("Please specify either --dumpdir or --feats-scp.")
 
     # get dataset
-    if args.dumpdir is not None:
+    if args.filename is not None:
+        basename=os.path.basename(args.filename)
+        dirname=os.path.dirname(args.filename)
+        if config["format"] == "hdf5":
+            mel_query = basename
+            mel_load_fn = lambda x: read_hdf5(x, "feats")  # NOQA
+        elif config["format"] == "npy":
+            mel_query = basename
+            mel_load_fn = np.load
+        else:
+            raise ValueError("Support only hdf5 or npy format.")
+        dataset = MelDataset(
+            dirname,
+            mel_query=mel_query,
+            mel_load_fn=mel_load_fn,
+            return_utt_id=True,
+        )
+    elif args.dumpdir is not None:
         if config["format"] == "hdf5":
             mel_query = "*.h5"
             mel_load_fn = lambda x: read_hdf5(x, "feats")  # NOQA

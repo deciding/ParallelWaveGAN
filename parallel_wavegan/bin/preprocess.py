@@ -145,6 +145,7 @@ def main():
             sampling_rate = config["sampling_rate"]
             hop_size = config["hop_size"]
         else:
+            print('sampling_rate_for_feats: %d' % config["sampling_rate"])
             # NOTE(kan-bayashi): this procedure enables to train the model with different
             #   sampling rate for feature and audio, e.g., training with mel extracted
             #   using 16 kHz audio and 24 kHz audio as a target waveform
