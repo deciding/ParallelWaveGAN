@@ -23,6 +23,8 @@ def stft(x, fft_size, hop_size, win_length, window):
         Tensor: Magnitude spectrogram (B, #frames, fft_size // 2 + 1).
 
     """
+    # stft: stft of num of frames decided by hopsize, out F decided by fftsize/2+1
+    # out is B F T 2, last dim is real and imagine part
     x_stft = torch.stft(x, fft_size, hop_size, win_length, window)
     real = x_stft[..., 0]
     imag = x_stft[..., 1]
@@ -70,7 +72,7 @@ class LogSTFTMagnitudeLoss(torch.nn.Module):
             Tensor: Log STFT magnitude loss value.
 
         """
-        return F.l1_loss(torch.log(y_mag), torch.log(x_mag))
+        return F.l1_loss(torch.log(y_mag), torch.log(x_mag)) # by default calculate mean
 
 
 class STFTLoss(torch.nn.Module):

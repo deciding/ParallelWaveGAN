@@ -8,7 +8,7 @@
 
 # basic settings
 #TODO
-stage=3       # stage to start is 2
+stage=2       # stage to start is 2
 stop_stage=100 # stage to stop
 verbose=1      # verbosity level (lower is less info)
 n_gpus=1       # number of gpus in training
@@ -19,20 +19,25 @@ n_jobs=16      # number of parallel jobs in feature extraction
 #conf=conf/parallel_wavegan.v1.yaml
 #conf=conf/fmax12k_parallel_wavegan.v1.yaml
 conf=conf/fmax8k_parallel_wavegan.v1.yaml
+conf=conf/fmax8k_parallel_wavegan.v2.yaml
 
 # directory path setting
 download_dir=downloads # direcotry to save downloaded files
 #TODO
 #dumpdir=dump           # directory to dump features
 #dumpdir=dump_kf           # directory to dump features
-#dumpdir=dump_kf8k           # directory to dump features
-dumpdir=dump_gta_kf8k           # directory to dump features
-dumpdir=dump_man1028           # directory to dump features
+dumpdir=dump_kf8k           # directory to dump features
+#dumpdir=dump_gta_kf8k           # directory to dump features
+#dumpdir=dump_man1028           # directory to dump features
+#dumpdir=dump_man1107           # directory to dump features
 #TODO
 #datasetname=csmsc
 #datasetname=kuangfei
+datasetname=kuangfei8k_v2
 #datasetname=kuangfei8k_gta
-datasetname=man1028
+#datasetname=kuangfei8k_gta_v2
+#datasetname=man1028
+#datasetname=man1107
 #TODO
 filename=dump/tacotron/tmp.npy
 filename=dump_kf8k/tacotron/
@@ -44,6 +49,7 @@ resume=""  # checkpoint path to resume training
 #TODO
 # resume=exp/train_nodev_kuangfei_fmax12k_parallel_wavegan.v1/checkpoint-315000steps.pkl
 # resume=exp/train_nodev_kuangfei8k_fmax8k_parallel_wavegan.v1/checkpoint-265000steps.pkl
+resume=exp/train_nodev_kuangfei8k_v2_fmax8k_parallel_wavegan.v2/checkpoint-190000steps.pkl
 
 # decoding related setting
 checkpoint="" # checkpoint path to be used for decoding

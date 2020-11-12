@@ -124,6 +124,6 @@ class ResidualBlock(torch.nn.Module):
         s = self.conv1x1_skip(x)
 
         # for residual connection
-        x = (self.conv1x1_out(x) + residual) * math.sqrt(0.5)
+        x = (self.conv1x1_out(x) + residual) * math.sqrt(0.5) #TODO for gated, sum of two? 1/sqrt(2)
 
         return x, s

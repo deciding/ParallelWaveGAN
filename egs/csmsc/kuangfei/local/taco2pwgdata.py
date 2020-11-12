@@ -9,9 +9,15 @@ import numpy as np
 #dataname='kuangfei8k'
 #data_dir='/workspace/ssd2/training_cn_kuangfei_prosody/8/'
 #root_dir='/workspace/ParallelWaveGAN/egs/csmsc/voc1/dump_kf8k/'
-dataname='man1028'
-data_dir='/workspace/ssd3/train_pwg_pindao/1'
-root_dir='/workspace/pwg/egs/csmsc/voc1/dump_man1028/'
+
+#dataname='man1028'
+#data_dir='/workspace/ssd3/train_pwg_pindao/1'
+#root_dir='/workspace/pwg/egs/csmsc/voc1/dump_man1028/'
+
+dataname='man1107'
+data_dir='/workspace/ssd3/train_pwg_man1107/1'
+root_dir='/workspace/pwg/egs/csmsc/voc1/dump_man1107/'
+
 datasets=['train_nodev', 'dev', 'eval']
 mels_dir=f"{data_dir}/mels"
 wave_dir=f"{data_dir}/audio"

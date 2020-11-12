@@ -38,7 +38,7 @@ class ParallelWaveGANGenerator(torch.nn.Module):
                  use_causal_conv=False,
                  upsample_conditional_features=True,
                  upsample_net="ConvInUpsampleNetwork",
-                 upsample_params={"upsample_scales": [4, 4, 4, 4]},
+                 upsample_params={"upsample_scales": [4, 4, 4, 4]}, # 4, 5, 3, 5
                  ):
         """Initialize Parallel WaveGAN Generator module.
 
@@ -77,6 +77,8 @@ class ParallelWaveGANGenerator(torch.nn.Module):
         layers_per_stack = layers // stacks
 
         # define first convolution
+        # 1 -> 64
+        # B 64 L
         self.first_conv = Conv1d1x1(in_channels, residual_channels, bias=True)
 
         # define conv + upsampling network
@@ -93,12 +95,21 @@ class ParallelWaveGANGenerator(torch.nn.Module):
                 self.upsample_net = getattr(models, upsample_net)(**upsample_params)
             else:
                 if upsample_net == "ConvInUpsampleNetwork":
+                    # 4, 5, 3, 5 upsample scales
+                    # following two params are not used
                     upsample_params.update({
-                        "aux_channels": aux_channels,
-                        "aux_context_window": aux_context_window,
+                        "aux_channels": aux_channels, # 80
+                        "aux_context_window": aux_context_window, # 2
                     })
+                # in conv, 80->80, 2*2win+1 kernel, padded by 2win already: T -> T-2win
+                # upsample:
+                #   stretch:B 1 80 T -> B 1 80 (T-2win)*scale: 4 5 3 5, nearest neighbor upsampling
+                #   conv2d:1, 1, 9 11 7 11, 4 5 3 5
+                #   no bias
+                #   return B 80 (T-2win)*scale:L
+                #   note: every node will connect to 2 nodes in next layer, and with different distance for adjacent layers, this will not cause the same gradient.
                 self.upsample_net = getattr(upsample, upsample_net)(**upsample_params)
-            self.upsample_factor = np.prod(upsample_params["upsample_scales"])
+            self.upsample_factor = np.prod(upsample_params["upsample_scales"]) # 300, hop size
         else:
             self.upsample_net = None
             self.upsample_factor = 1
@@ -107,20 +118,27 @@ class ParallelWaveGANGenerator(torch.nn.Module):
         self.conv_layers = torch.nn.ModuleList()
         for layer in range(layers):
             dilation = 2 ** (layer % layers_per_stack)
+            # 1. conv1d kernel 3, dilated: B 64 L -> B 128 L
+            # 2. B 128 L -> B 64 L, B 64 L
+            # 3. B 80 L 1x1 -> B 128 L -> B 64 L, B 64 L
+            # 4. tanh * sigmoid of the sums
+            # 5. 1x1 -> skip channel B 64 L
+            # 6. 1x1 res 1/sqrt(2) -> res channel B 64 L
             conv = ResidualBlock(
-                kernel_size=kernel_size,
-                residual_channels=residual_channels,
-                gate_channels=gate_channels,
-                skip_channels=skip_channels,
-                aux_channels=aux_channels,
+                kernel_size=kernel_size, #1
+                residual_channels=residual_channels, # 64
+                gate_channels=gate_channels, # 128
+                skip_channels=skip_channels, # 64
+                aux_channels=aux_channels, # 80
                 dilation=dilation,
-                dropout=dropout,
-                bias=bias,
-                use_causal_conv=use_causal_conv,
+                dropout=dropout, # 0
+                bias=bias, # True
+                use_causal_conv=use_causal_conv, # False
             )
             self.conv_layers += [conv]
 
         # define output layers
+        # 64->64->1
         self.last_conv_layers = torch.nn.ModuleList([
             torch.nn.ReLU(inplace=True),
             Conv1d1x1(skip_channels, skip_channels, bias=True),
@@ -129,7 +147,7 @@ class ParallelWaveGANGenerator(torch.nn.Module):
         ])
 
         # apply weight norm
-        if use_weight_norm:
+        if use_weight_norm: # True
             self.apply_weight_norm()
 
     def forward(self, x, c):
@@ -144,20 +162,25 @@ class ParallelWaveGANGenerator(torch.nn.Module):
 
         """
         # perform upsampling
+        # x 6 1 25500
+        # c 6 80 89 -> 6 80 25500
         if c is not None and self.upsample_net is not None:
             c = self.upsample_net(c)
             assert c.size(-1) == x.size(-1)
 
         # encode to hidden representation
+        # conv1d1x1: 6 1 25500 -> 6 64 25500
         x = self.first_conv(x)
         skips = 0
         for f in self.conv_layers:
+            # 6 64 25500, 6 80 25500 -> 6 64 25500 res, 6 64 25500 skip
             x, h = f(x, c)
             skips += h
-        skips *= math.sqrt(1.0 / len(self.conv_layers))
+        skips *= math.sqrt(1.0 / len(self.conv_layers)) # TODO ?
 
         # apply final layers
         x = skips
+        # conv1d1x1s 6 64 25500 -> 6 1 25500
         for f in self.last_conv_layers:
             x = f(x)
 
@@ -259,13 +282,16 @@ class ParallelWaveGANDiscriminator(torch.nn.Module):
         assert dilation_factor > 0, "Dilation factor must be > 0."
         self.conv_layers = torch.nn.ModuleList()
         conv_in_channels = in_channels
+        # 0~8
+        # 1->64
         for i in range(layers - 1):
             if i == 0:
                 dilation = 1
             else:
+                # 1~8
                 dilation = i if dilation_factor == 1 else dilation_factor ** i
                 conv_in_channels = conv_channels
-            padding = (kernel_size - 1) // 2 * dilation
+            padding = (kernel_size - 1) // 2 * dilation # 1 1 2 3 4 5 6 7 8
             conv_layer = [
                 Conv1d(conv_in_channels, conv_channels,
                        kernel_size=kernel_size, padding=padding,
@@ -274,6 +300,7 @@ class ParallelWaveGANDiscriminator(torch.nn.Module):
             ]
             self.conv_layers += conv_layer
         padding = (kernel_size - 1) // 2
+        # 64->1
         last_conv_layer = Conv1d(
             conv_in_channels, out_channels,
             kernel_size=kernel_size, padding=padding, bias=bias)

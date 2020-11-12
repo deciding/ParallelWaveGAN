@@ -157,6 +157,7 @@ class Trainer(object):
     def _train_step(self, batch):
         """Train model one step."""
         # parse batch
+        # (6 1 25500, 6 80 89), 6 1 25500
         x, y = batch
         x = tuple([x_.to(self.device) for x_ in x])
         y = y.to(self.device)
@@ -167,6 +168,7 @@ class Trainer(object):
         y_ = self.model["generator"](*x)
 
         # reconstruct the signal from multi-band signal
+        # False
         if self.config["generator_params"]["out_channels"] > 1:
             y_mb_ = y_
             y_ = self.criterion["pqmf"].synthesis(y_mb_)
@@ -178,6 +180,7 @@ class Trainer(object):
         gen_loss = sc_loss + mag_loss
 
         # subband multi-resolution stft loss
+        # False
         if self.config.get("use_subband_stft_loss", False):
             gen_loss *= 0.5  # for balancing with subband stft loss
             y_mb = self.criterion["pqmf"].analysis(y)
@@ -220,6 +223,7 @@ class Trainer(object):
                     adv_loss += self.config["lambda_feat_match"] * fm_loss
 
             # add adversarial loss to generator loss
+            # lambda=4.0
             gen_loss += self.config["lambda_adv"] * adv_loss
 
         self.total_train_loss["train/generator_loss"] += gen_loss.item()
@@ -227,6 +231,7 @@ class Trainer(object):
         # update generator
         self.optimizer["generator"].zero_grad()
         gen_loss.backward()
+        # grad_norm=10
         if self.config["generator_grad_norm"] > 0:
             torch.nn.utils.clip_grad_norm_(
                 self.model["generator"].parameters(),
@@ -238,7 +243,7 @@ class Trainer(object):
         #    Discriminator    #
         #######################
         if self.steps > self.config["discriminator_train_start_steps"]:
-            # re-compute y_ which leads better quality
+            # NOTE:re-compute y_ which leads better quality
             with torch.no_grad():
                 y_ = self.model["generator"](*x)
             if self.config["generator_params"]["out_channels"] > 1:
@@ -272,6 +277,7 @@ class Trainer(object):
             # update discriminator
             self.optimizer["discriminator"].zero_grad()
             dis_loss.backward()
+            # grad_norm=1
             if self.config["discriminator_grad_norm"] > 0:
                 torch.nn.utils.clip_grad_norm_(
                     self.model["discriminator"].parameters(),
@@ -286,6 +292,7 @@ class Trainer(object):
 
     def _train_epoch(self):
         """Train model one epoch."""
+        # why start from 1?
         for train_steps_per_epoch, batch in enumerate(self.data_loader["train"], 1):
             # train one step
             self._train_step(batch)
@@ -578,7 +585,7 @@ class Collater(object):
         c_batch = torch.tensor(c_batch, dtype=torch.float).transpose(2, 1)  # (B, C, T')
 
         # make input noise signal batch tensor
-        if self.use_noise_input:
+        if self.use_noise_input: # True
             z_batch = torch.randn(y_batch.size())  # (B, 1, T)
             return (z_batch, c_batch), y_batch
         else:
@@ -641,6 +648,7 @@ def main():
     parser.add_argument("--rank", "--local_rank", default=0, type=int,
                         help="rank for distributed training. no need to explictly specify.")
     args = parser.parse_args()
+    print(args)
 
     args.distributed = False
     if not torch.cuda.is_available():
@@ -702,6 +710,7 @@ def main():
 
     # get dataset
     if config["remove_short_samples"]:
+        # 85+4=89
         mel_length_threshold = config["batch_max_steps"] // config["hop_size"] + \
             2 * config["generator_params"].get("aux_context_window", 0)
     else:
@@ -717,6 +726,7 @@ def main():
             mel_load_fn = np.load
         else:
             raise ValueError("support only hdf5 or npy format.")
+    # just eliminate short ones than 89
     if args.train_dumpdir is not None:
         train_dataset = AudioMelDataset(
             root_dir=args.train_dumpdir,
@@ -767,6 +777,7 @@ def main():
         # keep compatibility
         aux_context_window=config["generator_params"].get("aux_context_window", 0),
         # keep compatibility
+        # by default PWG generator
         use_noise_input=config.get(
             "generator_type", "ParallelWaveGANGenerator") != "MelGANGenerator",
     )
@@ -786,6 +797,8 @@ def main():
             rank=args.rank,
             shuffle=False,
         )
+    # Collator will cover the aux_context on left and right of mel
+    # It returns (z_batch, c_batch), y_batch shape: 6 1 25500, 6 80 89, 6 1 25500
     data_loader = {
         "train": DataLoader(
             dataset=dataset["train"],
@@ -793,6 +806,7 @@ def main():
             collate_fn=collater,
             batch_size=config["batch_size"],
             num_workers=config["num_workers"],
+            # num_workers=0,
             sampler=sampler["train"],
             pin_memory=config["pin_memory"],
         ),
@@ -802,6 +816,7 @@ def main():
             collate_fn=collater,
             batch_size=config["batch_size"],
             num_workers=config["num_workers"],
+            # num_workers=0,
             sampler=sampler["dev"],
             pin_memory=config["pin_memory"],
         ),
@@ -824,20 +839,21 @@ def main():
         "discriminator": discriminator_class(
             **config["discriminator_params"]).to(device),
     }
+    # {'fft_sizes': [1024, 2048, 512], 'hop_sizes': [120, 240, 50], 'win_lengths': [600, 1200, 240], 'window': 'hann_window'}
     criterion = {
         "stft": MultiResolutionSTFTLoss(
             **config["stft_loss_params"]).to(device),
         "mse": torch.nn.MSELoss().to(device),
     }
-    if config.get("use_feat_match_loss", False):  # keep compatibility
+    if config.get("use_feat_match_loss", False):  # keep compatibility, False
         criterion["l1"] = torch.nn.L1Loss().to(device)
-    if config["generator_params"]["out_channels"] > 1:
+    if config["generator_params"]["out_channels"] > 1: # False
         criterion["pqmf"] = PQMF(
             subbands=config["generator_params"]["out_channels"],
             # keep compatibility
             **config.get("pqmf_params", {})
         ).to(device)
-    if config.get("use_subband_stft_loss", False):  # keep compatibility
+    if config.get("use_subband_stft_loss", False):  # keep compatibility, False
         assert config["generator_params"]["out_channels"] > 1
         criterion["sub_stft"] = MultiResolutionSTFTLoss(
             **config["subband_stft_loss_params"]).to(device)
@@ -851,6 +867,7 @@ def main():
         # keep compatibility
         config.get("discriminator_optimizer_type", "RAdam"),
     )
+    # G vs D: 1e-4 vs 5e-5
     optimizer = {
         "generator": generator_optimizer_class(
             model["generator"].parameters(),
@@ -871,6 +888,7 @@ def main():
         # keep compatibility
         config.get("discriminator_scheduler_type", "StepLR"),
     )
+    # step decay: 200k 0.5
     scheduler = {
         "generator": generator_scheduler_class(
             optimizer=optimizer["generator"],
