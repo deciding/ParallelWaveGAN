@@ -303,3 +303,40 @@ class MelDataset(Dataset):
 
         """
         return len(self.mel_files)
+
+class MelMemDataset(Dataset):
+    """PyTorch compatible mel dataset."""
+
+    def __init__(self,
+                 mels,
+                 ):
+
+        # assert the number of files
+        assert len(mels) != 0, "mels is empty."
+
+        self.mels = mels
+
+    def __getitem__(self, idx):
+        """Get specified idx items.
+
+        Args:
+            idx (int): Index of the item.
+
+        Returns:
+            str: Utterance id (only in return_utt_id = True).
+            ndarray: Feature (T', C).
+
+        """
+
+        mel = self.mels[idx]
+
+        return mel
+
+    def __len__(self):
+        """Return dataset length.
+
+        Returns:
+            int: The length of dataset.
+
+        """
+        return len(self.mels)

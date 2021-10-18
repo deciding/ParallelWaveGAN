@@ -74,13 +74,13 @@ def read_hdf5(hdf5_name, hdf5_path):
 
     """
     if not os.path.exists(hdf5_name):
-        logging.error(f"There is no such a hdf5 file ({hdf5_name}).")
+        #logging.error(f"There is no such a hdf5 file ({hdf5_name}).")
         sys.exit(1)
 
     hdf5_file = h5py.File(hdf5_name, "r")
 
     if hdf5_path not in hdf5_file:
-        logging.error(f"There is no such a data in hdf5 file. ({hdf5_path} in {hdf5_file})")
+        #logging.error(f"There is no such a data in hdf5 file. ({hdf5_path} in {hdf5_file})")
         sys.exit(1)
 
     hdf5_data = hdf5_file[hdf5_path][()]
@@ -327,22 +327,27 @@ def download_pretrained_model(tag, download_dir=None):
         str: Path of downloaded model checkpoint.
 
     """
-    assert tag in PRETRAINED_MODEL_LIST, f"{tag} does not exists."
+    #assert tag in PRETRAINED_MODEL_LIST, f"{tag} does not exists."
     id_ = PRETRAINED_MODEL_LIST[tag]
     if download_dir is None:
         download_dir = os.path.expanduser("~/.cache/parallel_wavegan")
-    output_path = f"{download_dir}/{tag}.tar.gz"
-    os.makedirs(f"{download_dir}", exist_ok=True)
+    #output_path = f"{download_dir}/{tag}.tar.gz"
+    #os.makedirs(f"{download_dir}", exist_ok=True)
+    output_path = "%s/%s.tar.gz" % (download_dir, tag)
+    os.makedirs(download_dir, exist_ok=True)
     if not os.path.exists(output_path):
         # lazy load for compatibility
         import gdown
 
-        gdown.download(f"https://drive.google.com/uc?id={id_}", output_path, quiet=False)
+        #gdown.download(f"https://drive.google.com/uc?id={id_}", output_path, quiet=False)
+        gdown.download("https://drive.google.com/uc?id=%s" % id_, output_path, quiet=False)
         with tarfile.open(output_path, 'r:*') as tar:
             for member in tar.getmembers():
                 if member.isreg():
                     member.name = os.path.basename(member.name)
-                    tar.extract(member, f"{download_dir}/{tag}")
-    checkpoint_path = find_files(f"{download_dir}/{tag}", "checkpoint*.pkl")
+                    #tar.extract(member, f"{download_dir}/{tag}")
+                    tar.extract(member, "%s/%s" % (download_dir, tag))
+    #checkpoint_path = find_files(f"{download_dir}/{tag}", "checkpoint*.pkl")
+    checkpoint_path = find_files("%s/%s" % (download_dir, tag), "checkpoint*.pkl")
 
     return checkpoint_path[0]
